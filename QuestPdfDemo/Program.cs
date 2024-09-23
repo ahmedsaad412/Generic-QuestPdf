@@ -3,15 +3,15 @@ using QuestPdfDemo.Report;
 using System.ComponentModel.DataAnnotations;
 
 var Orientation = "Portrait"; // or "Landscape"
-var Language = "En"; // or "AR" 
+var Language = "Ar"; // or "Ar" 
 PageHeaderViewModel PageHeader =new PageHeaderViewModel()
             {ministryName = "Al Rayan Ministry",ReportTitle = "Dynamic Report Title"
                     ,ReportSubTitle = "bla bla bla ", ministryImg = "favicon.ico",EmployeeName = "Ahmed Saad Helmy"};
 var headers = new List<Header>
 {
-    new Header("ID", 0.5f, x => ((Product)x).ID),
-    new Header("Price", 2, x => ((Product)x).Price),
-    new Header("Product Name", 3, x => ((Product)x).ProductName),
+    new Header("ID","رقم الهوية" , x => ((Product)x).ID),
+    new Header("Price","السعر", x => ((Product)x).Price, 2),
+    new Header("Product Name","اسم السلعة", x => ((Product)x).ProductName, 3),
 };
 var products = new List<Product>
     {

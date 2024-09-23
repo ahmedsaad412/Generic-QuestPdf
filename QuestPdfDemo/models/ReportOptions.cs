@@ -28,13 +28,15 @@ namespace QuestPdfDemo.models
     }
     public class Header
     {
-        public string Name { get; set; }
-        public float Width { get; set; }
+        public string arName { get; set; }
+        public string enName { get; set; }
+        public float? Width { get; set; }
         public Func<object, object> Accessor { get; set; }
 
-        public Header (string name, float width, Func<object, object> accessor)
+        public Header (string en_name,string ar_name, Func<object, object> accessor, float width=1)
         {
-            Name = name;
+            enName = en_name;
+            arName = ar_name;
             Width = width;
             Accessor = accessor;
         }

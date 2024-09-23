@@ -33,7 +33,7 @@ namespace QuestPdfDemo.Report
                             .Element(c => ComposeHeader(c, _options.PageHeader));
 
                         page.Content()
-                            .Element(c => ComposeBody(c, _options.TableHeaders, _options.TableData));
+                            .Element(c => ComposeBody(c, _options.TableHeaders, _options.TableData, _options.Language));
                         ;
 
                         page.Footer()
@@ -71,7 +71,7 @@ namespace QuestPdfDemo.Report
             });
         }
 
-        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data)
+        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
         {
             container.PaddingBottom(1).Extend().Table(table =>
             {
@@ -80,7 +80,7 @@ namespace QuestPdfDemo.Report
                 {
                     foreach (var header in headers)
                     {
-                        columns.RelativeColumn(header.Width == 0 ? 2 : header.Width);
+                        columns.RelativeColumn((float)header.Width);
                     }
                 });
 
@@ -88,7 +88,8 @@ namespace QuestPdfDemo.Report
                 {
                     foreach (var header in headers)
                     {
-                        headerRow.Cell().Element(headerBlock).Text(header.Name);
+                        var name = language == "Ar" ?header.arName : header.enName;
+                        headerRow.Cell().Element(headerBlock).Text(name);
                     }
                 });
                 foreach (var row in data)
