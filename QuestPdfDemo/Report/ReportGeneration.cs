@@ -48,12 +48,11 @@ namespace QuestPdfDemo.Report
             container.Row(row =>
             {
 
-                row.ConstantItem(150)
-                .PaddingTop(20)
-                .Height(90)
-               .Text(header.ReportTitle)
-               .FontSize(26).FontColor(Colors.Orange.Accent4).SemiBold();
-
+                row.RelativeItem()
+                  .PaddingTop(20)
+                  .Height(90)
+                 .Text(header.ReportTitle)
+                 .FontSize(26).FontColor(Colors.Orange.Accent4).SemiBold();
                 row.RelativeItem().PaddingTop(20).Height(90).Column(column =>
 
                 {
@@ -69,8 +68,6 @@ namespace QuestPdfDemo.Report
                      .FontColor(Colors.Orange.Accent4).SemiBold();
                     column.Item().AlignCenter().Text(Placeholders.Label());
                 });
-
-
             });
         }
 
@@ -98,12 +95,21 @@ namespace QuestPdfDemo.Report
                 {
                     foreach (var header in headers)
                     {
-                        var property = typeof(T).GetProperty(header.Name.Replace(" ", ""));
-                       
-                        var value = property != null ? property.GetValue(row)?.ToString() : string.Empty;
+                        // Use the accessor function to get the value for the column
+                        var value = header.Accessor(row)?.ToString() ?? string.Empty;
                         table.Cell().Element(Block).Text(value);
                     }
                 }
+                //foreach (var row in data)
+                //{
+                //    foreach (var header in headers)
+                //    {
+                //        var property = typeof(T).GetProperty(header.Name.Replace(" ", ""));
+
+                //        var value = property != null ? property.GetValue(row)?.ToString() : string.Empty;
+                //        table.Cell().Element(Block).Text(value);
+                //    }
+                //}
             });
         }
         IContainer Block (IContainer container)

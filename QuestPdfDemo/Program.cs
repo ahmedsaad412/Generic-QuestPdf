@@ -3,16 +3,16 @@ using QuestPdfDemo.Report;
 using System.ComponentModel.DataAnnotations;
 
 var Orientation = "Portrait"; // or "Landscape"
-var Language = "EN"; // or "AR" 
+var Language = "En"; // or "AR" 
 PageHeaderViewModel PageHeader =new PageHeaderViewModel()
             {ministryName = "Al Rayan Ministry",ReportTitle = "Dynamic Report Title"
                     ,ReportSubTitle = "bla bla bla ", ministryImg = "favicon.ico",EmployeeName = "Ahmed Saad Helmy"};
 var headers = new List<Header>
-    {
-        new Header("ID", 1),
-        new Header("Product Name", 3),
-        new Header("Price", 2),
-    };
+{
+    new Header("ID", 0.5f, x => ((Product)x).ID),
+    new Header("Price", 2, x => ((Product)x).Price),
+    new Header("Product Name", 3, x => ((Product)x).ProductName),
+};
 var products = new List<Product>
     {
         new Product { ID = 1, ProductName = "Product A", Price = 99.99m },
