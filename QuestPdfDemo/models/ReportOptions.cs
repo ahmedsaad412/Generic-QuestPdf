@@ -31,13 +31,15 @@ namespace QuestPdfDemo.models
         public string arName { get; set; }
         public string enName { get; set; }
         public float? Width { get; set; }
+        public int? Order { get; set; }
         public Func<object, object> Accessor { get; set; }
 
-        public Header (string en_name,string ar_name, Func<object, object> accessor, float width=1)
+        public Header (string en_name,string ar_name, Func<object, object> accessor ,int? order= null, float width = 1)
         {
             enName = en_name;
             arName = ar_name;
             Width = width;
+            Order = order;
             Accessor = accessor;
         }
     }

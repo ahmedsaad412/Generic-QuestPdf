@@ -70,15 +70,47 @@ namespace QuestPdfDemo.Report
                 });
             });
         }
+        //public List<Header> ReorderHeadersByOrder (List<Header> headers)
+        //{
+        //    return headers.OrderBy(header => header.Order).ToList();
+        //}
+        public List<Header> ReorderHeadersByOrder (List<Header> headers)
+        {
+            // Separate headers with and without an Order
+            var orderedHeaders = headers.Where(h => h.Order.HasValue).OrderBy(h => h.Order).ToList();
+            var unorderedHeaders = headers.Where(h => !h.Order.HasValue).ToList();
 
+            // Insert unordered headers in their original positions relative to their appearance in the list
+            var result = new List<Header>();
+            int unorderedIndex = 0;
+
+            for (int i = 0 ; i < headers.Count ; i++)
+            {
+                // If there is a header with an Order that matches the current index, insert it
+                if (orderedHeaders.Any(h => h.Order == result.Count + 1))
+                {
+                    var nextOrdered = orderedHeaders.First(h => h.Order == result.Count + 1);
+                    result.Add(nextOrdered);
+                }
+                else if (unorderedIndex < unorderedHeaders.Count)
+                {
+                    // Insert unordered headers in original positions relative to their initial list
+                    result.Add(unorderedHeaders[unorderedIndex]);
+                    unorderedIndex++;
+                }
+            }
+
+            return result;
+        }
         private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
         {
+            List<Header> headerList = ReorderHeadersByOrder(headers);
             container.PaddingBottom(1).Extend().Table(table =>
             {
 
                 table.ColumnsDefinition(columns =>
                 {
-                    foreach (var header in headers)
+                    foreach (var header in headerList)
                     {
                         columns.RelativeColumn((float)header.Width);
                     }
@@ -86,15 +118,15 @@ namespace QuestPdfDemo.Report
 
                 table.Header(headerRow =>
                 {
-                    foreach (var header in headers)
+                    foreach (var header in headerList)
                     {
                         var name = language == "Ar" ?header.arName : header.enName;
                         headerRow.Cell().Element(headerBlock).Text(name);
                     }
                 });
-                foreach (var row in data)
+                foreach (var row in data) 
                 {
-                    foreach (var header in headers)
+                    foreach (var header in headerList) 
                     {
                         // Use the accessor function to get the value for the column
                         var value = header.Accessor(row)?.ToString() ?? string.Empty;
