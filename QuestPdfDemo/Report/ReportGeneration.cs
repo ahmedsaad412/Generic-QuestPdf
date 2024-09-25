@@ -14,6 +14,7 @@ using System.Data;
 using System.Collections;
 using System.Data.Common;
 using System.Reflection;
+using System.Runtime.InteropServices.JavaScript;
 namespace QuestPdfDemo.Report
 {
     public class ReportGeneration
@@ -79,34 +80,72 @@ namespace QuestPdfDemo.Report
         //{
         //    return headers.OrderBy(header => header.Order).ToList();
         //}
-        public List<Header> ReorderHeadersByOrder (List<Header> headers)
-        {// 2 3 6 
-            // Separate headers with and without an Order
-            var orderedHeaders = headers.Where(h => h.Order.HasValue).OrderBy(h => h.Order).ToList();
-            var unorderedHeaders = headers.Where(h => !h.Order.HasValue).ToList();
+        //private List<string> GetNonPrimitivePropertyNames (object obj)
+        //{
+        //    var result = new List<string>();
 
-            // Insert unordered headers in their original positions relative to their appearance in the list
-            var result = new List<Header>();
-            int unorderedIndex = 0;
+        //    // Check if the object is non-primitive (not a value type or string)
+        //    if (obj != null && !obj.GetType().IsPrimitive && obj.GetType() != typeof(string))
+        //    {
+        //        // Get all public properties of the object
+        //        var properties = obj.GetType().GetProperties();
 
-            for (int i = 0 ; i < headers.Count ; i++)
+        //        foreach (var property in properties)
+        //        {
+        //            // Add only the name of the property to the result list
+        //            result.Add(property.Name);
+        //        }
+        //    }
+
+        //    return result;
+        //}
+        private Dictionary<string, List<string>> GetNonPrimitiveListPropertyNames (object obj)
+        {
+            var result = new Dictionary<string, List<string>>();
+
+            // Get all public properties of the object
+            var properties = obj.GetType().GetProperties();
+
+            foreach (var property in properties)
             {
-                // If there is a header with an Order that matches the current index, insert it
-                if (orderedHeaders.Any(h => h.Order == result.Count + 1))
+                // Check if the property is a list (IEnumerable) but not a string
+                if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
                 {
-                    var nextOrdered = orderedHeaders.First(h => h.Order == result.Count + 1);
-                    result.Add(nextOrdered);
-                }
-                else if (unorderedIndex < unorderedHeaders.Count)
-                {
-                    // Insert unordered headers in original positions relative to their initial list
-                    result.Add(unorderedHeaders[unorderedIndex]);
-                    unorderedIndex++;
+                    // Get the value of the property (the list)
+                    var value = property.GetValue(obj);
+
+                    if (value is IEnumerable list)
+                    {
+                        // Get the type of elements in the list
+                        var elementType = property.PropertyType.GetGenericArguments().FirstOrDefault();
+
+                        if (elementType != null && !elementType.IsPrimitive && elementType != typeof(string))
+                        {
+                            // Create a list to store property names of the list items
+                            var propertyNames = new List<string>();
+
+                            // Get properties of the first item in the list (if there is any)
+                            var firstItem = list.Cast<object>().FirstOrDefault();
+                            if (firstItem != null)
+                            {
+                                var elementProperties = elementType.GetProperties();
+
+                                foreach (var prop in elementProperties)
+                                {
+                                    propertyNames.Add(prop.Name); // Add the property names
+                                }
+                            }
+
+                            // Add the list type and its properties to the result dictionary
+                            result.Add(property.Name, propertyNames);
+                        }
+                    }
                 }
             }
 
             return result;
         }
+
         private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
         {
             List<Header> headerList = ReorderHeadersByOrder(headers);
@@ -123,49 +162,92 @@ namespace QuestPdfDemo.Report
 
                 table.Header(headerRow =>
                 {
-                    foreach (var header in headerList)
+                    var rowData = data.FirstOrDefault();
+                    var listOfPropertyNames = GetNonPrimitiveListPropertyNames(rowData);
+                    var listLength =(uint) listOfPropertyNames.Count;
+                    if (listLength == 0)
                     {
-                        var name = language == "Ar" ?header.arName : header.enName;
-                        headerRow.Cell().Element(headerBlock).Text(name);
-                    }
-                });
-                foreach (var row in data) 
-                {
-                    var maxListCount =(uint) GetMaxListCount(row);
-                    foreach (var header in headerList) 
-                    {
-
-                        var value = header.Accessor(row);
-
-                            
-                        if (value is IEnumerable<object> list)
+                        foreach (var header in headerList)
                         {
-
-                            var joinedValues = ValuesList(list);
-                            var listLength = joinedValues.Count();
-
-                            foreach (var text in joinedValues)
-                            {
-                                table.Cell().Element(mergedBlock).Text(text);
-                            }
-                            
+                            var name = language == "Ar" ? header.arName : header.enName;
+                            headerRow.Cell().Element(headerBlock).Text(name);
                         }
-                        else
+
+                    }
+                    else
+                    {
+                        foreach (var header in headerList)
                         {
-                            if (maxListCount > 0)
+                            var name = language == "Ar" ? header.arName : header.enName;
+                            if (listOfPropertyNames.ContainsKey(name.Trim()))
                             {
-                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
+                                var propertyNames = listOfPropertyNames[name.Trim()];
+                                headerRow.Cell().ColumnSpan(listLength).Element(headerBlock).Text(name);
+                                foreach (var propName in propertyNames)
+                                {
+
+                                    headerRow.Cell().Element(headerBlock).Text(propName);
+                                    
+                                }
                             }
                             else
-                            {
-                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
+                            { 
+                             headerRow.Cell().RowSpan(listLength).Element(headerBlock).Text(name);
                             }
-
                         }
-
                     }
-                }
-               
+                });
+                // Iterate through the data rows
+            //    foreach (var row in data)
+            //    {
+            //        var maxListCount = (uint)GetMaxListCount(row);
+            //        foreach (var header in headerList)
+            //        {
+            //            var value = header.Accessor(row); // Use delegate to get the property value
+
+            //            // Check if the value is an IEnumerable (list)
+            //            if (value is IEnumerable<object> list)
+            //            {
+            //                // Check if the list contains complex objects
+            //                var firstItem = list.FirstOrDefault();
+            //                if (firstItem != null && !IsPrimitive(firstItem.GetType()))
+            //                {
+            //                    // Handle complex type lists (e.g., List<Type>, List<Customer>)
+            //                    foreach (var complexItem in list)
+            //                    {
+            //                        var properties = complexItem.GetType().GetProperties();
+            //                        foreach (var property in properties)
+            //                        {
+            //                            var propertyValue = property.GetValue(complexItem)?.ToString() ?? string.Empty;
+            //                            table.Cell().Element(mergedBlock).Text(propertyValue);
+            //                        }
+            //                    }
+            //                }
+            //                else
+            //                {
+            //                    // Handle primitive type lists (e.g., List<string>, List<int>)
+            //                    var joinedValues = ValuesList(list);
+            //                    foreach (var text in joinedValues)
+            //                    {
+            //                        table.Cell().Element(mergedBlock).Text(text);
+            //                    }
+            //                }
+            //            }
+            //            else
+            //            {
+            //                // Handle primitive types or objects directly
+            //                if (maxListCount > 0)
+            //                {
+            //                    table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
+            //                }
+            //                else
+            //                {
+            //                    table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
+            //                }
+            //            }
+            //        }
+            //    }
+
             });
         }
         #region get max list count   
@@ -233,8 +315,38 @@ namespace QuestPdfDemo.Report
                       .Max();                                              // Get the maximum list count
         }
 
-     
+        public List<Header> ReorderHeadersByOrder (List<Header> headers)
+        {// 2 3 6 
+            // Separate headers with and without an Order
+            var orderedHeaders = headers.Where(h => h.Order.HasValue).OrderBy(h => h.Order).ToList();
+            var unorderedHeaders = headers.Where(h => !h.Order.HasValue).ToList();
 
+            // Insert unordered headers in their original positions relative to their appearance in the list
+            var result = new List<Header>();
+            int unorderedIndex = 0;
+
+            for (int i = 0 ; i < headers.Count ; i++)
+            {
+                // If there is a header with an Order that matches the current index, insert it
+                if (orderedHeaders.Any(h => h.Order == result.Count + 1))
+                {
+                    var nextOrdered = orderedHeaders.First(h => h.Order == result.Count + 1);
+                    result.Add(nextOrdered);
+                }
+                else if (unorderedIndex < unorderedHeaders.Count)
+                {
+                    // Insert unordered headers in original positions relative to their initial list
+                    result.Add(unorderedHeaders[unorderedIndex]);
+                    unorderedIndex++;
+                }
+            }
+
+            return result;
+        }
+        private bool IsPrimitive (Type type)
+        {
+            return type.IsPrimitive || type == typeof(string) || type == typeof(decimal);
+        }
         public IEnumerable<object> ValuesList (IEnumerable<object> list)
         {
             if (list == null || !list.Any())
@@ -287,7 +399,7 @@ namespace QuestPdfDemo.Report
                 .Border(1)
                 .BorderColor(Colors.Blue.Accent4)
                 .Background(Colors.Grey.Lighten3)
-                .PaddingVertical(5)
+                
                 .ShowEntire()
                 
                 .AlignMiddle()
