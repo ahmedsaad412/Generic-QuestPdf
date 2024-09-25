@@ -168,33 +168,72 @@ namespace QuestPdfDemo.Report
                
             });
         }
+        #region get max list count   
+        #region v1  
+        //public static int GetMaxListCount (object obj)
+        //{
+        //    int maxCount = 0;
+
+        //    // Get all properties of the object
+        //    var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        //    foreach (var property in properties)
+        //    {
+        //        // Check if the property is a list (but not a string)
+        //        if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
+        //        {
+        //            // Get the value of the property
+        //            var value = property.GetValue(obj);
+
+        //            if (value is IEnumerable list)
+        //            {
+        //                // Get the count of items in the list
+        //                int count = list.Cast<object>().Count();
+        //                // Track the maximum count
+        //                maxCount = Math.Max(maxCount, count);
+        //            }
+        //        }
+        //    }
+
+        //    return maxCount;
+        //}
+        #endregion
+        #region v2  
+        //public static int GetMaxListCount (object obj)
+        //{
+        //    // Ensure the object is not null
+        //    if (obj == null)
+        //        return 0;
+
+
+        //    return obj.GetType()
+        //              .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        //              .Where(prop => typeof(IEnumerable).IsAssignableFrom(prop.PropertyType) && prop.PropertyType != typeof(string))
+        //              .Select(prop => prop.GetValue(obj) as IEnumerable)
+        //              .Where(list => list != null)  // Filter out null lists
+        //              .Select(list => list.Cast<object>().Count())  // Get the count of each list
+        //              .DefaultIfEmpty(0)  // If no lists are found, return 0
+        //              .Max();  // Get the maximum count
+        //}  
+        #endregion
+        #endregion
         public static int GetMaxListCount (object obj)
         {
-            int maxCount = 0;
+            // Return 0 if the object is null
+            if (obj == null)
+                return 0;
 
-            // Get all properties of the object
-            var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-            foreach (var property in properties)
-            {
-                // Check if the property is a list (but not a string)
-                if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
-                {
-                    // Get the value of the property
-                    var value = property.GetValue(obj);
-
-                    if (value is IEnumerable list)
-                    {
-                        // Get the count of items in the list
-                        int count = list.Cast<object>().Count();
-                        // Track the maximum count
-                        maxCount = Math.Max(maxCount, count);
-                    }
-                }
-            }
-
-            return maxCount;
+            // Extract all enumerable properties (excluding strings) and return the max count
+            return obj.GetType()
+                      .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                      .Select(prop => prop.GetValue(obj) as IEnumerable)   // Try to cast property value to IEnumerable
+                      .Where(list => list != null && !(list is string))    // Filter out null values and strings
+                      .Select(list => list.Cast<object>().Count())         // Get count of each list
+                      .DefaultIfEmpty(0)                                  // Handle cases where no lists exist
+                      .Max();                                              // Get the maximum list count
         }
+
+     
 
         public IEnumerable<object> ValuesList (IEnumerable<object> list)
         {
