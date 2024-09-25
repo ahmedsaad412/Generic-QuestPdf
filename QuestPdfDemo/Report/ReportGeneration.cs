@@ -10,6 +10,10 @@ using QuestPDF.Infrastructure;
 using QuestPDF.Previewer;
 using System.Linq.Expressions;
 using QuestPdfDemo.Styles;
+using System.Data;
+using System.Collections;
+using System.Data.Common;
+using System.Reflection;
 namespace QuestPdfDemo.Report
 {
     public class ReportGeneration
@@ -45,6 +49,7 @@ namespace QuestPdfDemo.Report
 
         private void ComposeHeader (IContainer container, PageHeaderViewModel header)
         {
+
             container.Row(row =>
             {
 
@@ -75,7 +80,7 @@ namespace QuestPdfDemo.Report
         //    return headers.OrderBy(header => header.Order).ToList();
         //}
         public List<Header> ReorderHeadersByOrder (List<Header> headers)
-        {
+        {// 2 3 6 
             // Separate headers with and without an Order
             var orderedHeaders = headers.Where(h => h.Order.HasValue).OrderBy(h => h.Order).ToList();
             var unorderedHeaders = headers.Where(h => !h.Order.HasValue).ToList();
@@ -126,41 +131,148 @@ namespace QuestPdfDemo.Report
                 });
                 foreach (var row in data) 
                 {
+                    var maxListCount =(uint) GetMaxListCount(row);
                     foreach (var header in headerList) 
                     {
-                        // Use the accessor function to get the value for the column
-                        var value = header.Accessor(row)?.ToString() ?? string.Empty;
-                        table.Cell().Element(Block).Text(value);
+
+                        var value = header.Accessor(row);
+
+                            
+                        if (value is IEnumerable<object> list)
+                        {
+
+                            var joinedValues = ValuesList(list);
+                            var listLength = joinedValues.Count();
+
+                            foreach (var text in joinedValues)
+                            {
+                                table.Cell().Element(mergedBlock).Text(text);
+                            }
+                            
+                        }
+                        else
+                        {
+                            if (maxListCount > 0)
+                            {
+                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+                            else
+                            {
+                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+
+                        }
+
                     }
                 }
-                //foreach (var row in data)
-                //{
-                //    foreach (var header in headers)
-                //    {
-                //        var property = typeof(T).GetProperty(header.Name.Replace(" ", ""));
-
-                //        var value = property != null ? property.GetValue(row)?.ToString() : string.Empty;
-                //        table.Cell().Element(Block).Text(value);
-                //    }
-                //}
+               
             });
+        }
+        public static int GetMaxListCount (object obj)
+        {
+            int maxCount = 0;
+
+            // Get all properties of the object
+            var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var property in properties)
+            {
+                // Check if the property is a list (but not a string)
+                if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
+                {
+                    // Get the value of the property
+                    var value = property.GetValue(obj);
+
+                    if (value is IEnumerable list)
+                    {
+                        // Get the count of items in the list
+                        int count = list.Cast<object>().Count();
+                        // Track the maximum count
+                        maxCount = Math.Max(maxCount, count);
+                    }
+                }
+            }
+
+            return maxCount;
+        }
+
+        public IEnumerable<object> ValuesList (IEnumerable<object> list)
+        {
+            if (list == null || !list.Any())
+                yield break; // Empty list, return early
+
+            // Determine the type of the first element
+            var firstItem = list.First();
+            var itemType = firstItem.GetType().Name;
+            foreach (var item in list)
+            {
+                if (item == null)
+                {
+                    yield return null; // Handle null values in the list
+                }
+                else
+                {
+                    switch (itemType)
+                    {
+                        case "Int32":
+                            yield return Convert.ToInt32(item); // Return as int
+                            break;
+
+                        case "Single":
+                            yield return Convert.ToSingle(item); // Return as float
+                            break;
+
+                        case "Double":
+                            yield return Convert.ToDouble(item); // Return as double
+                            break;
+
+                        case "Decimal":
+                            yield return Convert.ToDecimal(item); // Return as decimal
+                            break;
+
+                        case "String":
+                            yield return item.ToString(); // Return as string
+                            break;
+
+                        default:
+                            yield return item; // If none of the above, return as-is
+                            break;
+                    }
+                }
+            }
+      
         }
         IContainer Block (IContainer container)
         {
             return container
                 .Border(1)
+                .BorderColor(Colors.Blue.Accent4)
                 .Background(Colors.Grey.Lighten3)
                 .PaddingVertical(5)
                 .ShowEntire()
-                .AlignCenter()
+                
                 .AlignMiddle()
                 .AlignCenter();
+        }
+        IContainer mergedBlock (IContainer container)
+        {
+            return container
+
+               .Border(1)
+                .Background(Colors.Grey.Lighten3)
+                .AlignCenter()
+                .AlignMiddle()
+                 .PaddingVertical(1)
+                 .BorderColor(Colors.Blue.Accent4)
+                .ShowEntire()
+
+                 ;
         }
         IContainer headerBlock (IContainer container)
         {
             return container
                 .Border(1)
-                .Background(Colors.Grey.Lighten3)
+                .Background(Colors.Green.Lighten3)
                 .PaddingBottom(1)
                 .ShowOnce()
                 .AlignCenter()
