@@ -15,6 +15,7 @@ using System.Collections;
 using System.Data.Common;
 using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
+using System.Xml.Linq;
 namespace QuestPdfDemo.Report
 {
     public class ReportGeneration
@@ -151,20 +152,38 @@ namespace QuestPdfDemo.Report
             List<Header> headerList = ReorderHeadersByOrder(headers);
             container.PaddingBottom(1).Extend().Table(table =>
             {
+                var rowData = data.FirstOrDefault();
+                var listOfPropertyNames = GetNonPrimitiveListPropertyNames(rowData);
+                var listLength = (uint)listOfPropertyNames.Count;
 
                 table.ColumnsDefinition(columns =>
                 {
                     foreach (var header in headerList)
                     {
-                        columns.RelativeColumn((float)header.Width);
+                        var name = language == "Ar" ? header.arName : header.enName;
+                        if (listOfPropertyNames.ContainsKey(name.Trim()))
+                        {
+                            columns.RelativeColumn((float)header.Width);
+                            columns.RelativeColumn();
+                             
+
+                            //var propertyNames = listOfPropertyNames[name.Trim()];
+                            //foreach (var propName in propertyNames)
+                            //{
+                            //   columns.RelativeColumn();
+                            //}
+                        }
+                        else
+                        {
+
+                            columns.RelativeColumn((float)header.Width);
+                        }
                     }
                 });
 
                 table.Header(headerRow =>
                 {
-                    var rowData = data.FirstOrDefault();
-                    var listOfPropertyNames = GetNonPrimitiveListPropertyNames(rowData);
-                    var listLength =(uint) listOfPropertyNames.Count;
+                    
                     if (listLength == 0)
                     {
                         foreach (var header in headerList)
@@ -182,71 +201,76 @@ namespace QuestPdfDemo.Report
                             if (listOfPropertyNames.ContainsKey(name.Trim()))
                             {
                                 var propertyNames = listOfPropertyNames[name.Trim()];
-                                headerRow.Cell().ColumnSpan(listLength).Element(headerBlock).Text(name);
+                                headerRow.Cell().ColumnSpan((uint)propertyNames.Count).Element(headerBlock).Text(name);
                                 foreach (var propName in propertyNames)
                                 {
 
-                                    headerRow.Cell().Element(headerBlock).Text(propName);
+                                    headerRow.Cell().Element(SecondryHeaderBlock).Text(propName);
                                     
                                 }
                             }
                             else
                             { 
-                             headerRow.Cell().RowSpan(listLength).Element(headerBlock).Text(name);
+                             headerRow.Cell().RowSpan(2).Element(headerBlock).Text(name);
                             }
                         }
                     }
                 });
-                // Iterate through the data rows
-            //    foreach (var row in data)
-            //    {
-            //        var maxListCount = (uint)GetMaxListCount(row);
-            //        foreach (var header in headerList)
-            //        {
-            //            var value = header.Accessor(row); // Use delegate to get the property value
-
-            //            // Check if the value is an IEnumerable (list)
-            //            if (value is IEnumerable<object> list)
-            //            {
-            //                // Check if the list contains complex objects
-            //                var firstItem = list.FirstOrDefault();
-            //                if (firstItem != null && !IsPrimitive(firstItem.GetType()))
-            //                {
-            //                    // Handle complex type lists (e.g., List<Type>, List<Customer>)
-            //                    foreach (var complexItem in list)
-            //                    {
-            //                        var properties = complexItem.GetType().GetProperties();
-            //                        foreach (var property in properties)
-            //                        {
-            //                            var propertyValue = property.GetValue(complexItem)?.ToString() ?? string.Empty;
-            //                            table.Cell().Element(mergedBlock).Text(propertyValue);
-            //                        }
-            //                    }
-            //                }
-            //                else
-            //                {
-            //                    // Handle primitive type lists (e.g., List<string>, List<int>)
-            //                    var joinedValues = ValuesList(list);
-            //                    foreach (var text in joinedValues)
-            //                    {
-            //                        table.Cell().Element(mergedBlock).Text(text);
-            //                    }
-            //                }
-            //            }
-            //            else
-            //            {
-            //                // Handle primitive types or objects directly
-            //                if (maxListCount > 0)
-            //                {
-            //                    table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
-            //                }
-            //                else
-            //                {
-            //                    table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
-            //                }
-            //            }
-            //        }
-            //    }
+               // Iterate through the data rows
+                foreach (var row in data)
+                {
+                    var maxListCount = (uint)GetMaxListCount(row);
+                    foreach (var header in headerList)
+                    {
+                        var value = header.Accessor(row); // Use delegate to get the property value
+                        
+                        // Check if the value is an IEnumerable (list)
+                        if (value is IEnumerable<object> list)
+                        {
+                            // Check if the list contains complex objects
+                            var firstItem = list.FirstOrDefault();
+                            if (firstItem != null && !IsPrimitive(firstItem.GetType()))
+                            {
+                                // Handle complex type lists (e.g., List<Type>, List<Customer>)
+                                foreach (var complexItem in list)
+                                {
+                                    var properties = complexItem.GetType().GetProperties();
+                                    foreach (var property in properties)
+                                    {
+                                        var propertyValue = property.GetValue(complexItem)?.ToString() ?? string.Empty;
+                                        table.Cell().Element(mergedBlock).Text(propertyValue);
+                                    }
+                                    var x = maxListCount - list.Count();
+                                    for (var i = 0; i < x; i++)
+                                    {
+                                        table.Cell().Element(mergedBlock).Text("");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Handle primitive type lists (e.g., List<string>, List<int>)
+                                var joinedValues = ValuesList(list);
+                                foreach (var text in joinedValues)
+                                {
+                                    table.Cell().Element(mergedBlock).Text(text);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Handle primitive types or objects directly
+                            if (maxListCount > 0)
+                            {
+                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+                            else
+                            {
+                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+                        }
+                    }
+                }
 
             });
         }
@@ -347,52 +371,146 @@ namespace QuestPdfDemo.Report
         {
             return type.IsPrimitive || type == typeof(string) || type == typeof(decimal);
         }
-        public IEnumerable<object> ValuesList (IEnumerable<object> list)
+        public List<object> ValuesList (IEnumerable<object> list)
         {
-            if (list == null || !list.Any())
-                yield break; // Empty list, return early
+            // Handle null case early
+            if (list == null)
+                return new List<object>();
 
-            // Determine the type of the first element
-            var firstItem = list.First();
-            var itemType = firstItem.GetType().Name;
+            // Pre-allocate result list if possible (optimize for collections)
+            var resultList = list is ICollection<object> collection
+                ? new List<object>(collection.Count)
+                : new List<object>();
+
             foreach (var item in list)
             {
                 if (item == null)
                 {
-                    yield return null; // Handle null values in the list
+                    resultList.Add(null); // Add null if the item is null
+                    continue;
+                }
+
+                // Use 'is' with direct type casting for performance
+                if (item is int intValue)
+                {
+                    resultList.Add(intValue); // Add as int
+                }
+                else if (item is float floatValue)
+                {
+                    resultList.Add(floatValue); // Add as float
+                }
+                else if (item is double doubleValue)
+                {
+                    resultList.Add(doubleValue); // Add as double
+                }
+                else if (item is decimal decimalValue)
+                {
+                    resultList.Add(decimalValue); // Add as decimal
+                }
+                else if (item is string stringValue)
+                {
+                    resultList.Add(stringValue); // Add as string
                 }
                 else
                 {
-                    switch (itemType)
-                    {
-                        case "Int32":
-                            yield return Convert.ToInt32(item); // Return as int
-                            break;
-
-                        case "Single":
-                            yield return Convert.ToSingle(item); // Return as float
-                            break;
-
-                        case "Double":
-                            yield return Convert.ToDouble(item); // Return as double
-                            break;
-
-                        case "Decimal":
-                            yield return Convert.ToDecimal(item); // Return as decimal
-                            break;
-
-                        case "String":
-                            yield return item.ToString(); // Return as string
-                            break;
-
-                        default:
-                            yield return item; // If none of the above, return as-is
-                            break;
-                    }
+                    resultList.Add(item); // Add other types as-is
                 }
             }
-      
+
+            return resultList; // Return the fully constructed list
         }
+
+        //public IEnumerable<object> ValuesList (IEnumerable<object> list)
+        //{
+        //    if (list == null || !list.Any())
+        //        yield break; // Empty list, return early
+
+        //    foreach (var item in list)
+        //    {
+        //        if (item == null)
+        //        {
+        //            yield return null; // Handle null values in the list
+        //        }
+        //        else
+        //        {
+        //            // Use pattern matching to handle different types
+        //            switch (item)
+        //            {
+        //                case int intValue:
+        //                    yield return intValue; // Return as int
+        //                    break;
+
+        //                case float floatValue:
+        //                    yield return floatValue; // Return as float
+        //                    break;
+
+        //                case double doubleValue:
+        //                    yield return doubleValue; // Return as double
+        //                    break;
+
+        //                case decimal decimalValue:
+        //                    yield return decimalValue; // Return as decimal
+        //                    break;
+
+        //                case string stringValue:
+        //                    yield return stringValue; // Return as string
+        //                    break;
+
+        //                default:
+        //                    yield return item; // If none of the above, return as-is
+        //                    break;
+        //            }
+        //        }
+        //    }
+        //}
+        //public List<object> ValuesList (IEnumerable<object> list)
+        //{
+        //    var resultList = new List<object>();
+
+        //    if (list == null || !list.Any())
+        //        return resultList; // Return an empty list if input is null or empty
+
+        //    foreach (var item in list)
+        //    {
+        //        if (item == null)
+        //        {
+        //            resultList.Add(null); // Handle null values in the list
+        //        }
+        //        else
+        //        {
+        //             Use pattern matching to handle different types
+        //            switch (item)
+        //            {
+        //                case int intValue:
+        //                    resultList.Add(intValue); // Add int
+        //                    break;
+
+        //                case float floatValue:
+        //                    resultList.Add(floatValue); // Add float
+        //                    break;
+
+        //                case double doubleValue:
+        //                    resultList.Add(doubleValue); // Add double
+        //                    break;
+
+        //                case decimal decimalValue:
+        //                    resultList.Add(decimalValue); // Add decimal
+        //                    break;
+
+        //                case string stringValue:
+        //                    resultList.Add(stringValue); // Add string
+        //                    break;
+
+        //                default:
+        //                    resultList.Add(item); // If none of the above, add as-is
+        //                    break;
+        //            }
+        //        }
+        //    }
+
+        //    return resultList; // Return the fully constructed list
+        //}
+
         IContainer Block (IContainer container)
         {
             return container
@@ -420,6 +538,16 @@ namespace QuestPdfDemo.Report
                  ;
         }
         IContainer headerBlock (IContainer container)
+        {
+            return container
+                .Border(1)
+                .Background(Colors.Green.Lighten3)
+                .PaddingBottom(1)
+                .ShowOnce()
+                .AlignCenter()
+                .AlignMiddle();
+        }
+        IContainer SecondryHeaderBlock (IContainer container)
         {
             return container
                 .Border(1)
