@@ -251,10 +251,14 @@ namespace QuestPdfDemo.Report
                             {
                                 // Handle primitive type lists (e.g., List<string>, List<int>)
                                 var joinedValues = ValuesList(list);
-                                foreach (var text in joinedValues)
+                                table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(column =>
                                 {
-                                    table.Cell().Element(mergedBlock).Text(text);
-                                }
+                                    foreach (var value in joinedValues)
+                                    {
+                                        // For each value, add a text item to the column
+                                        column.Item().Element(mergedBlock).AlignCenter().Text(value);
+                                    }
+                                }));
                             }
                         }
                         else
