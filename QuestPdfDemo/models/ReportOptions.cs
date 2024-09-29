@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -25,6 +26,7 @@ namespace QuestPdfDemo.models
             TableHeaders = headers;
             TableData = data;
         } // Rows of data
+
     }
     public class Header
     {
@@ -32,15 +34,30 @@ namespace QuestPdfDemo.models
         public string enName { get; set; }
         public float? Width { get; set; }
         public int? Order { get; set; }
-        public Func<object, object> Accessor { get; set; }
+        public Expression<Func<object, object>> Accessor { get; set; }
 
-        public Header (string en_name,string ar_name, Func<object, object> accessor ,int? order= null, float width = 1)
+        public Header (string en_name,string ar_name, Expression<Func<object, object>> accessor ,int? order= null, float width = 1)
         {
             enName = en_name;
             arName = ar_name;
             Width = width;
             Order = order;
             Accessor = accessor;
+        }
+        public string GetPropertyName ()
+        {
+            // Extract the property name from the expression
+            if (Accessor.Body is MemberExpression memberExpression)
+            {
+                return memberExpression.Member.Name;
+            }
+
+            if (Accessor.Body is UnaryExpression unaryExpression && unaryExpression.Operand is MemberExpression memberExpr)
+            {
+                return memberExpr.Member.Name;
+            }
+
+            return null;
         }
     }
     public class DataViewModel()

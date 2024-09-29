@@ -219,14 +219,23 @@ namespace QuestPdfDemo.Report
                // Iterate through the data rows
                 foreach (var row in data)
                 {
+                    var AllLists = GetListLengths(row);
+
                     var maxListCount = (uint)GetMaxListCount(row);
                     foreach (var header in headerList)
                     {
-                        var value = header.Accessor(row); // Use delegate to get the property value
+
+                        var value = header.Accessor.Compile()(row);  
+
+                       
+                        var propertyName = header.GetPropertyName();
+                        AllLists.TryGetValue(propertyName, out uint lengthOfList);
+                     
                         
-                        // Check if the value is an IEnumerable (list)
+                     
                         if (value is IEnumerable<object> list)
                         {
+                           
                             // Check if the list contains complex objects
                             var firstItem = list.FirstOrDefault();
                             if (firstItem != null && !IsPrimitive(firstItem.GetType()))
@@ -235,16 +244,28 @@ namespace QuestPdfDemo.Report
                                 foreach (var complexItem in list)
                                 {
                                     var properties = complexItem.GetType().GetProperties();
+                                    var propNumber =(uint) properties.Length;
+
                                     foreach (var property in properties)
                                     {
                                         var propertyValue = property.GetValue(complexItem)?.ToString() ?? string.Empty;
-                                        table.Cell().Element(mergedBlock).Text(propertyValue);
+                                        //table.Cell().Element(Block).Text(propertyValue?.ToString() ?? string.Empty);
+
+                                        table.Cell().RowSpan(lengthOfList / propNumber).Row(p => p.RelativeColumn().Column(column =>
+                                        {
+
+
+                                            column.Item().Element(mergedBlock).AlignCenter().Text(propertyValue);
+
+                                        }));
+
+
                                     }
-                                    var x = maxListCount - list.Count();
-                                    for (var i = 0; i < x; i++)
-                                    {
-                                        table.Cell().Element(mergedBlock).Text("");
-                                    }
+                                    //var x = maxListCount - list.Count();
+                                    //for (var i = 0; i < x; i++)
+                                    //{
+                                    //    table.Cell().Element(mergedBlock).Text("");
+                                    //}
                                 }
                             }
                             else
@@ -341,6 +362,34 @@ namespace QuestPdfDemo.Report
                       .Select(list => list.Cast<object>().Count())         // Get count of each list
                       .DefaultIfEmpty(0)                                  // Handle cases where no lists exist
                       .Max();                                              // Get the maximum list count
+        }
+        public static Dictionary<string, uint> GetListLengths (object obj)
+        {
+            // Return an empty dictionary if the object is null
+            if (obj == null)
+                return new Dictionary<string, uint>();
+
+            // Create a dictionary to store the lengths of each list
+            var listLengths = new Dictionary<string, uint>();
+
+            // Extract all enumerable properties (excluding strings)
+            var properties = obj.GetType()
+                                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                .Where(prop => prop.GetValue(obj) is IEnumerable && !(prop.GetValue(obj) is string));
+
+            foreach (var prop in properties)
+            {
+                var list = prop.GetValue(obj) as IEnumerable;
+
+                if (list != null)
+                {
+                    // Count the number of elements in the list and store in the dictionary
+                    uint count = (uint)list.Cast<object>().Count();
+                    listLengths.Add(prop.Name,count);  // Store the property name and its list length
+                }
+            }
+
+            return listLengths;
         }
 
         public List<Header> ReorderHeadersByOrder (List<Header> headers)
