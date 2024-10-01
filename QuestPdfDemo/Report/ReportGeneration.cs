@@ -86,6 +86,7 @@ namespace QuestPdfDemo.Report
             {
                 var rowData = data.FirstOrDefault();
                 var listOfPropertyNames = GetNonPrimitiveListPropertyNames(rowData);
+                var PropertiesNames = GetPropertyNamesArray(listOfPropertyNames);
                 var listLength = (uint)listOfPropertyNames.Count;
 
                 table.ColumnsDefinition(columns =>
@@ -121,20 +122,27 @@ namespace QuestPdfDemo.Report
                     {
                         foreach (var header in headerList)
                         {
+
                             var name = language == "Ar" ? header.arName : header.enName;
+
+
                             if (listOfPropertyNames.ContainsKey(name.Trim()))
                             {
+                               
                                 var propertyNames = listOfPropertyNames[name.Trim()];
                                 headerRow.Cell().ColumnSpan((uint)propertyNames.Count).Element(headerBlock).Text(name);
-                                foreach (var propName in propertyNames)
-                                {
-                                    headerRow.Cell().Element(SecondryHeaderBlock).Text(propName);
-                                }
+                               
                             }
                             else
                             { 
                              headerRow.Cell().RowSpan(2).Element(headerBlock).Text(name);
                             }
+                           
+                        }
+
+                        foreach (var propName in PropertiesNames)
+                        {
+                            headerRow.Cell().Element(SecondryHeaderBlock).Text(propName);
                         }
                     }
                 });
@@ -150,7 +158,7 @@ namespace QuestPdfDemo.Report
                             var firstItem = list.FirstOrDefault();
                             if (firstItem != null && !IsPrimitive(firstItem.GetType()))
                             {
-                                var myProperities = 1;
+                                var myProperities = 0;
                                 foreach (var complexItem in list)
                                 {
                                     var properties = complexItem.GetType().GetProperties();
@@ -173,11 +181,12 @@ namespace QuestPdfDemo.Report
                             }
                             else
                             {
-                                var joinedValues = ValuesList(list);
-                                var joinedvaluesLength =(uint) joinedValues.Count;
+                                /// not need
+                               // var joinedValues = ValuesList(list);
+                                var joinedvaluesLength =(uint) list.Count();
                                 table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(column =>
                                 {
-                                    foreach (var value in joinedValues)
+                                    foreach (var value in list)
                                     {
                                         column.Item().Element(mergedBlock).AlignCenter().Text(value);
                                     }
@@ -418,5 +427,21 @@ namespace QuestPdfDemo.Report
 
             return result;
         }
+        private string[] GetPropertyNamesArray (Dictionary<string, List<string>> dictionary)
+        {
+            // Create a list to store all property names
+            var allPropertyNames = new List<string>();
+
+            // Loop through the dictionary to get only the values (list of strings)
+            foreach (var entry in dictionary)
+            {
+                // Add each property name in the list to the result
+                allPropertyNames.AddRange(entry.Value);
+            }
+
+            // Convert the list of property names to an array and return it
+            return allPropertyNames.ToArray();
+        }
+
     }
 }
