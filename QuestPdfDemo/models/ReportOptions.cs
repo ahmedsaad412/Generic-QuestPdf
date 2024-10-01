@@ -26,6 +26,13 @@ namespace QuestPdfDemo.models
             TableData = data;
         } // Rows of data
     }
+    public enum HeaderType
+    {
+        Primitive,
+        ListOfPrimitives,
+        ComplexType
+    }
+
     public class Header
     {
         public string arName { get; set; }
@@ -33,16 +40,21 @@ namespace QuestPdfDemo.models
         public float? Width { get; set; }
         public int? Order { get; set; }
         public Func<object, object> Accessor { get; set; }
+        public List<Header>? ChildHeaders { get; set; } 
+        public HeaderType Type { get; set; } 
 
-        public Header (string en_name,string ar_name, Func<object, object> accessor ,int? order= null, float width = 1)
+        public Header (string en_name, string ar_name, Func<object, object> accessor, int? order = null, float width = 1, List<Header>? childHeaders = null, HeaderType type = HeaderType.Primitive)
         {
             enName = en_name;
             arName = ar_name;
             Width = width;
             Order = order;
             Accessor = accessor;
+            ChildHeaders = childHeaders;
+            Type = type;
         }
     }
+
     public class DataViewModel()
     {
         public string name { get; set; }

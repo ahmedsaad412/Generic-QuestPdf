@@ -77,9 +77,158 @@ namespace QuestPdfDemo.Report
                 });
             });
         }
+        public List<Header> GetHeadersWithChildHeaders (List<Header> headers)
+        {
+            var headersWithChildren = new List<Header>();
+
+            foreach (var header in headers)
+            {
+                if (header.ChildHeaders != null && header.ChildHeaders.Any())
+                {
+                    headersWithChildren.Add(header); // Add headers with child headers to the list
+                }
+            }
+
+            return headersWithChildren; // Return the list of headers with child headers
+        }
+        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data, string language)
+        {
+            List<Header> headerList = ReorderHeadersByOrder(headers);
+            List<Header> headersWithChildren = GetHeadersWithChildHeaders(headerList); 
+            container.PaddingBottom(1).Extend().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    foreach (var header in headerList)
+                    {
+                      
+                        if (header.Type == HeaderType.ComplexType)
+                        {
+                            columns.RelativeColumn((float)header.Width);
+                            columns.RelativeColumn();
+                        }
+                        else
+                        {
+                            columns.RelativeColumn((float)header.Width);
+                        }
+                    }
+                    
+                });
+
+                table.Header(headerRow =>
+                {
+                    if (headersWithChildren.Count ==0)
+                    {
+                        foreach (var header in headerList)
+                        {
+                            string name = language == "Ar" ? header.arName : header.enName;
+                            headerRow.Cell().Element(headerBlock).Text(name);
+                        }
+
+                    }
+                    else
+                    {
+                        foreach (var header in headerList)
+                        {
+
+                            string name = language == "Ar" ? header.arName : header.enName;
+                            int numberOfSubProperities = header.ChildHeaders?.Count??0;
+
+                            if (numberOfSubProperities > 0)
+                            {
+
+                                
+                                headerRow.Cell().ColumnSpan((uint)numberOfSubProperities).Element(headerBlock).Text(name);
+
+                            }
+                            else
+                            {
+                                headerRow.Cell().RowSpan(2).Element(headerBlock).Text(name);
+                            }
+
+                        }
+                        foreach (var header in headersWithChildren)
+                        {
+                            foreach (var childheader in header.ChildHeaders)
+                            {
+                                string name = language == "Ar" ? childheader.arName : childheader.enName;
+                                headerRow.Cell().Element(SecondryHeaderBlock).Text(name);
+                            }
+                        }
+
+                    }
+                   
+                });
+                foreach (var row in data)
+                {
+                    var maxListCount = (uint)GetMaxListCount(row);
+                    foreach (var header in headerList)
+                    {
+                        var value = header.Accessor(row);
+                        if (value is IEnumerable<object> list)
+                        {
+                             
+                            if (header.Type == HeaderType.ComplexType)
+                            {
+                                var myProperities = 0;
+
+                                foreach (var complexItem in list)
+                                {
+                                    foreach (var complexHeader in headersWithChildren)
+                                    {
+                                        myProperities = complexHeader.ChildHeaders.Count;
+                                        foreach (var subHeader in complexHeader.ChildHeaders)
+                                        {
+                                            var subHeaderValue = subHeader.Accessor(complexItem);
+                                            table.Cell().Element(mergedBlock).Text(subHeaderValue);
+                                        }
+                                           
+                                    }
+                                }
+                                var x = Math.Abs(maxListCount - list.Count());
+                                for (var i = 0 ; i < x ; i++)
+                                {
+                                    for (int j = 0 ; j < myProperities ; j++)
+                                    {
+                                        table.Cell().Element(mergedBlock).Text("");
+
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(column =>
+                                {
+                                    foreach (var value in list)
+                                    {
+                                        column.Item().Element(mergedBlock).AlignCenter().Text(value);
+                                    }
+                                    var x = Math.Abs(maxListCount - (uint)list.Count());
+                                    for (var i = 0 ; i < x ; i++)
+                                    {
+                                        column.Item().Element(mergedBlock).Text("");
+                                    }
+                                }));
+                            }
+                        }
+                        else
+                        {
+                            if (maxListCount > 0)
+                            {
+                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+                            else
+                            {
+                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
+                            }
+                        }
+                    }
+                }           
+            });
+        }
 
 
-        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
+        private void ComposeBoody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
         {
             List<Header> headerList = ReorderHeadersByOrder(headers);
             container.PaddingBottom(1).Extend().Table(table =>
@@ -303,27 +452,7 @@ namespace QuestPdfDemo.Report
         {
             return type.IsPrimitive || type == typeof(string) || type == typeof(decimal);
         }
-        private List<object> ConvertToList<T> (IEnumerable<object> list) =>
-             list.Cast<T>().Select(item => (object)item).ToList();
-
-        public List<object> ValuesList (IEnumerable<object> list)
-        {
-            if (list == null || !list.Any())
-                return new List<object>();
-
-            var firstItem = list.First();
-
-            return firstItem switch
-            {
-                string _ => ConvertToList<string>(list),
-                int _ => ConvertToList<int>(list),
-                float _ => ConvertToList<float>(list),
-                double _ => ConvertToList<double>(list),
-                decimal _ => ConvertToList<decimal>(list),
-                char _ => ConvertToList<char>(list),
-                _ => list.ToList() // Fallback for mixed types
-            };
-        }
+       
         IContainer Block (IContainer container)
         {
             return container
