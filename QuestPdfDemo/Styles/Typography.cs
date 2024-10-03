@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace QuestPdfDemo.Styles
 {
     // single typography class can help with keeping a consistent look & feel in the document
-    public static class Typography
+    public static class TypographyStyle
     {
      
         public static TextStyle Title => TextStyle

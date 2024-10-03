@@ -16,14 +16,17 @@ using System.Data.Common;
 using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
 using System.Xml.Linq;
+using static QuestPDF.Helpers.Colors;
+using System.Reflection.PortableExecutable;
 namespace QuestPdfDemo.Report
 {
     public class ReportGeneration
     {
 
 
-        public void GeneratePdf<T> (ReportOptions<T> _options)
+        public byte [] GeneratePdf<T> (ReportOptions<T> _options)
         {
+            return
             Document.Create(container =>
             {
                 container
@@ -35,21 +38,198 @@ namespace QuestPdfDemo.Report
                             page.ContentFromRightToLeft();
                         page.Margin(50);
 
-                        page.Header()
-                            .Element(c => ComposeHeader(c, _options.PageHeader));
+                        page.Header().Component(new HeaderComponent(_options.PageHeader));
+
+                        //page.Header()
+                        //    .Element(c => ComposeHeader(c, _options.PageHeader));
 
                         page.Content()
                             .Element(c => ComposeBody(c, _options.TableHeaders, _options.TableData, _options.Language));
                         ;
 
                         page.Footer()
-                            .Element(ComposeFooter);
+                            .Component<FooterComponent>();
+                        //page.Footer()
+                        //    .Element(ComposeFooter);
                     });
-            }).ShowInPreviewer();
+            }).GeneratePdf();
 
         }
 
-        private void ComposeHeader (IContainer container, PageHeaderViewModel header)
+         
+        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data, string language)
+        {
+            List<Header> headerList =ReportHelper.ReorderHeadersByOrder(headers);
+            List<Header> headersWithChildren = ReportHelper.GetHeadersWithChildHeaders(headerList);
+            container.PaddingBottom(1).Extend().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    foreach (var header in headerList)
+                    {
+
+                        if (header.Type == HeaderType.ComplexType)
+                        {
+                            columns.RelativeColumn();
+                            columns.RelativeColumn();
+                        }
+                        else
+                        {
+                            columns.RelativeColumn((float)header.Width);
+                        }
+                    }
+
+                });
+
+                table.Header(headerRow =>
+                {
+                    if (headersWithChildren.Count == 0)
+                    {
+                        foreach (var header in headerList)
+                        {
+                            string name = language == "Ar" ? header.arName : header.enName;
+                            headerRow.Cell().headerBlock().Text(name);
+                        }
+
+                    }
+                    else
+                    {
+                        foreach (var header in headerList)
+                        {
+
+                            string name = language == "Ar" ? header.arName : header.enName;
+                            int numberOfSubProperities = header.ChildHeaders?.Count ?? 0;
+
+                            if (numberOfSubProperities > 0)
+                            {
+
+
+                                headerRow.Cell().ColumnSpan((uint)numberOfSubProperities).headerBlock().Text(name);
+
+                            }
+                            else
+                            {
+                                headerRow.Cell().RowSpan(2).headerBlock().Text(name);
+                            }
+
+                        }
+                        foreach (var header in headersWithChildren)
+                        {
+                            foreach (var childheader in header.ChildHeaders)
+                            {
+                                string name = language == "Ar" ? childheader.arName : childheader.enName;
+                                headerRow.Cell().SecondryHeaderBlock().Text(name);
+                            }
+                        }
+
+                    }
+
+                });
+                foreach (var row in data)
+                {
+                    var maxListCount = (uint)ReportHelper.GetMaxListCount(row);
+                    foreach (var header in headerList)
+                    {
+                        var value = header.Accessor(row);
+                        if (value is IEnumerable<object> list)
+                        {
+
+                            if (header.Type == HeaderType.ComplexType)
+                            {
+                                var myProperities = header.ChildHeaders.Count;
+                                table.Cell().RowSpan(maxListCount).ColumnSpan((uint)myProperities).Column(column =>
+                                {
+                                    int renderedRows = 0;
+                                    foreach (var complexItem in list)
+                                    {
+                                        column.Item().Row(row =>
+                                        {
+                                            foreach (var subHeader in header.ChildHeaders)
+                                            {
+                                                var subHeaderValue = subHeader.Accessor(complexItem);
+                                                row.RelativeColumn().mergedBlock().AlignCenter().Text(subHeaderValue?.ToString() ?? string.Empty);
+                                            }
+                                        });
+
+                                        renderedRows++;
+                                    }
+                                    while (renderedRows < maxListCount)
+                                    {
+                                        column.Item().Row(row =>
+                                        {
+                                            row.RelativeColumn().mergedBlock().AlignCenter().Text("");
+                                        });
+
+                                        renderedRows++;
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                int renderedRows = 0;
+                                table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(
+                                    column =>
+                                {
+                                    foreach (var value in list)
+                                    {
+                                        column.Item().mergedBlock().AlignCenter().Text(value);
+                                        renderedRows++;
+                                    }
+                                    while (renderedRows < maxListCount)
+                                    {
+                                        column.Item().Row(row =>
+                                        {
+                                            row.RelativeColumn().mergedBlock().AlignCenter().Text("");
+                                        });
+
+                                        renderedRows++;
+                                    }
+                                }));
+                            }
+                        }
+                        else
+                        {
+                            if (maxListCount > 0)
+                            {
+                                table.Cell().RowSpan(maxListCount).MyBlock().Text(value?.ToString() ?? string.Empty);
+                            }
+                            else
+                            {
+                                table.Cell().MyBlock().Text(value?.ToString() ?? string.Empty);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+  
+
+    }
+    public class FooterComponent : IComponent
+    {
+        public void Compose (IContainer container)
+        {
+            container.AlignCenter().Text(text =>
+            {
+                text.DefaultTextStyle(x => x.FontSize(16));
+                text.Span("Page Number ");
+                text.CurrentPageNumber();
+                text.Span(" of ").FontColor(Colors.Orange.Accent4).Underline();
+                text.TotalPages();
+            });
+        }
+    }
+    public class HeaderComponent : IComponent
+    {
+        private readonly PageHeaderViewModel header;
+
+        public HeaderComponent (PageHeaderViewModel _header)
+        {
+            header = _header;
+        }
+        public void Compose (IContainer container)
         {
 
             container.Row(row =>
@@ -63,7 +243,7 @@ namespace QuestPdfDemo.Report
                 row.RelativeItem().PaddingTop(20).Height(90).Column(column =>
 
                 {
-                    column.Item().Text(header.ReportSubTitle).Style(Typography.Title).AlignCenter();
+                    column.Item().Text(header.ReportSubTitle).Style(TypographyStyle.Title).AlignCenter();
 
                     column.Item().Text(header.EmployeeName).AlignCenter();
                 });
@@ -77,356 +257,71 @@ namespace QuestPdfDemo.Report
                 });
             });
         }
-        public List<Header> GetHeadersWithChildHeaders (List<Header> headers)
+    }
+    public static class BlockExtentions
+    {
+        public static IContainer headerBlock (this IContainer container)
         {
-            var headersWithChildren = new List<Header>();
-
-            foreach (var header in headers)
-            {
-                if (header.ChildHeaders != null && header.ChildHeaders.Any())
-                {
-                    headersWithChildren.Add(header); // Add headers with child headers to the list
-                }
-            }
-
-            return headersWithChildren; // Return the list of headers with child headers
+            return container
+                .Border(1)
+                .Background(Colors.Green.Lighten3)
+                .PaddingBottom(1)
+                .ShowOnce()
+                .AlignCenter()
+                .AlignMiddle();
         }
-        private void ComposeBody<T> (IContainer container, List<Header> headers, List<T> data, string language)
+        public static IContainer mergedBlock (this IContainer container)
         {
-            List<Header> headerList = ReorderHeadersByOrder(headers);
-            List<Header> headersWithChildren = GetHeadersWithChildHeaders(headerList); 
-            container.PaddingBottom(1).Extend().Table(table =>
-            {
-                table.ColumnsDefinition(columns =>
-                {
-                    foreach (var header in headerList)
-                    {
-                      
-                        if (header.Type == HeaderType.ComplexType)
-                        {
-                            columns.RelativeColumn((float)header.Width);
-                            columns.RelativeColumn();
-                        }
-                        else
-                        {
-                            columns.RelativeColumn((float)header.Width);
-                        }
-                    }
-                    
-                });
+            return container
 
-                table.Header(headerRow =>
-                {
-                    if (headersWithChildren.Count ==0)
-                    {
-                        foreach (var header in headerList)
-                        {
-                            string name = language == "Ar" ? header.arName : header.enName;
-                            headerRow.Cell().Element(headerBlock).Text(name);
-                        }
+               .Border(1).BorderColor(Colors.Blue.Accent4)
+                .Background(Colors.Grey.Lighten3)
+                .AlignCenter()
+                .AlignMiddle()
+                 .PaddingVertical(1)
+                 .BorderColor(Colors.Blue.Accent4)
+                .ShowEntire()
 
-                    }
-                    else
-                    {
-                        foreach (var header in headerList)
-                        {
-
-                            string name = language == "Ar" ? header.arName : header.enName;
-                            int numberOfSubProperities = header.ChildHeaders?.Count??0;
-
-                            if (numberOfSubProperities > 0)
-                            {
-
-                                
-                                headerRow.Cell().ColumnSpan((uint)numberOfSubProperities).Element(headerBlock).Text(name);
-
-                            }
-                            else
-                            {
-                                headerRow.Cell().RowSpan(2).Element(headerBlock).Text(name);
-                            }
-
-                        }
-                        foreach (var header in headersWithChildren)
-                        {
-                            foreach (var childheader in header.ChildHeaders)
-                            {
-                                string name = language == "Ar" ? childheader.arName : childheader.enName;
-                                headerRow.Cell().Element(SecondryHeaderBlock).Text(name);
-                            }
-                        }
-
-                    }
-                   
-                });
-                foreach (var row in data)
-                {
-                    var maxListCount = (uint)GetMaxListCount(row);
-                    foreach (var header in headerList)
-                    {
-                        var value = header.Accessor(row);
-                        if (value is IEnumerable<object> list)
-                        {
-                             
-                            if (header.Type == HeaderType.ComplexType)
-                            {
-                                var myProperities = 0;
-
-                                foreach (var complexItem in list)
-                                {
-                                    foreach (var complexHeader in headersWithChildren)
-                                    {
-                                        myProperities = complexHeader.ChildHeaders.Count;
-                                        foreach (var subHeader in complexHeader.ChildHeaders)
-                                        {
-                                            var subHeaderValue = subHeader.Accessor(complexItem);
-                                            table.Cell().Element(mergedBlock).Text(subHeaderValue);
-                                        }
-                                           
-                                    }
-                                }
-                                var x = Math.Abs(maxListCount - list.Count());
-                                for (var i = 0 ; i < x ; i++)
-                                {
-                                    for (int j = 0 ; j < myProperities ; j++)
-                                    {
-                                        table.Cell().Element(mergedBlock).Text("");
-
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(column =>
-                                {
-                                    foreach (var value in list)
-                                    {
-                                        column.Item().Element(mergedBlock).AlignCenter().Text(value);
-                                    }
-                                    var x = Math.Abs(maxListCount - (uint)list.Count());
-                                    for (var i = 0 ; i < x ; i++)
-                                    {
-                                        column.Item().Element(mergedBlock).Text("");
-                                    }
-                                }));
-                            }
-                        }
-                        else
-                        {
-                            if (maxListCount > 0)
-                            {
-                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
-                            }
-                            else
-                            {
-                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
-                            }
-                        }
-                    }
-                }           
-            });
+                 ;
         }
-
-
-        private void ComposeBoody<T> (IContainer container, List<Header> headers, List<T> data ,string language)
+        public static IContainer MyBlock (this IContainer container)
         {
-            List<Header> headerList = ReorderHeadersByOrder(headers);
-            container.PaddingBottom(1).Extend().Table(table =>
-            {
-                var rowData = data.FirstOrDefault();
-                var listOfPropertyNames = GetNonPrimitiveListPropertyNames(rowData);
-                var PropertiesNames = GetPropertyNamesArray(listOfPropertyNames);
-                var listLength = (uint)listOfPropertyNames.Count;
+            return container
+              .Border(1)
+              .BorderColor(Colors.Blue.Accent4)
+              .Background(Colors.Grey.Lighten3)
 
-                table.ColumnsDefinition(columns =>
-                {
-                    foreach (var header in headerList)
-                    {
-                        var name = language == "Ar" ? header.arName : header.enName;
-                        if (listOfPropertyNames.ContainsKey(name.Trim()))
-                        {
-                            columns.RelativeColumn((float)header.Width);
-                            columns.RelativeColumn();
-                        }
-                        else
-                        {
-                            columns.RelativeColumn((float)header.Width);
-                        }
-                    }
-                });
+              .ShowEntire()
 
-                table.Header(headerRow =>
-                {
-                    
-                    if (listLength == 0)
-                    {
-                        foreach (var header in headerList)
-                        {
-                            var name = language == "Ar" ? header.arName : header.enName;
-                            headerRow.Cell().Element(headerBlock).Text(name);
-                        }
-
-                    }
-                    else
-                    {
-                        foreach (var header in headerList)
-                        {
-
-                            var name = language == "Ar" ? header.arName : header.enName;
-
-
-                            if (listOfPropertyNames.ContainsKey(name.Trim()))
-                            {
-                               
-                                var propertyNames = listOfPropertyNames[name.Trim()];
-                                headerRow.Cell().ColumnSpan((uint)propertyNames.Count).Element(headerBlock).Text(name);
-                               
-                            }
-                            else
-                            { 
-                             headerRow.Cell().RowSpan(2).Element(headerBlock).Text(name);
-                            }
-                           
-                        }
-
-                        foreach (var propName in PropertiesNames)
-                        {
-                            headerRow.Cell().Element(SecondryHeaderBlock).Text(propName);
-                        }
-                    }
-                });
-  
-                foreach (var row in data)
-                {
-                    var maxListCount = (uint)GetMaxListCount(row);
-                    foreach (var header in headerList)
-                    {
-                        var value = header.Accessor(row); 
-                        if (value is IEnumerable<object> list)
-                        {
-                            var firstItem = list.FirstOrDefault();
-                            if (firstItem != null && !IsPrimitive(firstItem.GetType()))
-                            {
-                                var myProperities = 0;
-                                foreach (var complexItem in list)
-                                {
-                                    var properties = complexItem.GetType().GetProperties();
-                                    myProperities = properties.Length;
-                                    foreach (var property in properties)
-                                    {
-                                        var propertyValue = property.GetValue(complexItem)?.ToString() ?? string.Empty;
-                                        table.Cell().Element(mergedBlock).Text(propertyValue);
-                                    }
-                                }
-                                var x = Math.Abs(maxListCount - list.Count());
-                                for (var i = 0 ; i < x ; i++)
-                                {
-                                    for (int j = 0 ; j < myProperities ; j++)
-                                    {
-                                        table.Cell().Element(mergedBlock).Text("");
-
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                /// not need
-                               // var joinedValues = ValuesList(list);
-                                var joinedvaluesLength =(uint) list.Count();
-                                table.Cell().RowSpan(maxListCount).Row(p => p.RelativeColumn().Column(column =>
-                                {
-                                    foreach (var value in list)
-                                    {
-                                        column.Item().Element(mergedBlock).AlignCenter().Text(value);
-                                    }
-                                    var x = Math.Abs(maxListCount - joinedvaluesLength);
-                                    for (var i = 0 ; i < x ; i++)
-                                    {
-                                        column.Item().Element(mergedBlock).Text("");
-                                    }
-                                }));
-                            }
-                        }
-                        else
-                        {
-                            if (maxListCount > 0)
-                            {
-                                table.Cell().RowSpan(maxListCount).Element(Block).Text(value?.ToString() ?? string.Empty);
-                            }
-                            else
-                            {
-                                table.Cell().Element(Block).Text(value?.ToString() ?? string.Empty);
-                            }
-                        }
-                    }
-                }
-
-            });
+              .AlignMiddle()
+              .AlignCenter();
+        }public static IContainer SecondryHeaderBlock (this IContainer container)
+        {
+            return container
+                        .Border(1)
+                        .Background(Colors.Green.Lighten3)
+                        .PaddingBottom(1)
+                        .ShowOnce()
+                        .AlignCenter()
+                .AlignMiddle();
         }
-        #region get max list count   
-        #region v1  
-        //public static int GetMaxListCount (object obj)
-        //{
-        //    int maxCount = 0;
-
-        //    // Get all properties of the object
-        //    var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        //    foreach (var property in properties)
-        //    {
-        //        // Check if the property is a list (but not a string)
-        //        if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
-        //        {
-        //            // Get the value of the property
-        //            var value = property.GetValue(obj);
-
-        //            if (value is IEnumerable list)
-        //            {
-        //                // Get the count of items in the list
-        //                int count = list.Cast<object>().Count();
-        //                // Track the maximum count
-        //                maxCount = Math.Max(maxCount, count);
-        //            }
-        //        }
-        //    }
-
-        //    return maxCount;
-        //}
-        #endregion
-        #region v2  
-        //public static int GetMaxListCount (object obj)
-        //{
-        //    // Ensure the object is not null
-        //    if (obj == null)
-        //        return 0;
-
-
-        //    return obj.GetType()
-        //              .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-        //              .Where(prop => typeof(IEnumerable).IsAssignableFrom(prop.PropertyType) && prop.PropertyType != typeof(string))
-        //              .Select(prop => prop.GetValue(obj) as IEnumerable)
-        //              .Where(list => list != null)  // Filter out null lists
-        //              .Select(list => list.Cast<object>().Count())  // Get the count of each list
-        //              .DefaultIfEmpty(0)  // If no lists are found, return 0
-        //              .Max();  // Get the maximum count
-        //}  
-        #endregion
-        #endregion
+    }
+    public static class ReportHelper
+    {
         public static int GetMaxListCount (object obj)
         {
             if (obj == null)
                 return 0;
             return obj.GetType()
                       .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                      .Select(prop => prop.GetValue(obj) as IEnumerable)   
-                      .Where(list => list != null && !(list is string))    
-                      .Select(list => list.Cast<object>().Count())          
-                      .DefaultIfEmpty(0)                                   
-                      .Max();                                               
+                      .Select(prop => prop.GetValue(obj) as IEnumerable)
+                      .Where(list => list != null && !(list is string))
+                      .Select(list => list.Cast<object>().Count())
+                      .DefaultIfEmpty(0)
+                      .Max();
         }
-
-        public List<Header> ReorderHeadersByOrder (List<Header> headers)
-        { 
+        public static List<Header> ReorderHeadersByOrder (List<Header> headers)
+        {
             var orderedHeaders = headers.Where(h => h.Order.HasValue).OrderBy(h => h.Order).ToList();
             var unorderedHeaders = headers.Where(h => !h.Order.HasValue).ToList();
             var result = new List<Header>();
@@ -448,129 +343,45 @@ namespace QuestPdfDemo.Report
 
             return result;
         }
-        private bool IsPrimitive (Type type)
+        public static List<Header> GetHeadersWithChildHeaders (List<Header> headers)
         {
-            return type.IsPrimitive || type == typeof(string) || type == typeof(decimal);
-        }
-       
-        IContainer Block (IContainer container)
-        {
-            return container
-                .Border(1)
-                .BorderColor(Colors.Blue.Accent4)
-                .Background(Colors.Grey.Lighten3)
-                
-                .ShowEntire()
-                
-                .AlignMiddle()
-                .AlignCenter();
-        }
-        IContainer mergedBlock (IContainer container)
-        {
-            return container
+            var headersWithChildren = new List<Header>();
 
-               .Border(1).BorderColor(Colors.Blue.Accent4)
-                .Background(Colors.Grey.Lighten3)
-                .AlignCenter()
-                .AlignMiddle()
-                 .PaddingVertical(1)
-                 .BorderColor(Colors.Blue.Accent4)
-                .ShowEntire()
-
-                 ;
-        }
-        IContainer headerBlock (IContainer container)
-        {
-            return container
-                .Border(1)
-                .Background(Colors.Green.Lighten3)
-                .PaddingBottom(1)
-                .ShowOnce()
-                .AlignCenter()
-                .AlignMiddle();
-        }
-        IContainer SecondryHeaderBlock (IContainer container)
-        {
-            return container
-                .Border(1)
-                .Background(Colors.Green.Lighten3)
-                .PaddingBottom(1)
-                .ShowOnce()
-                .AlignCenter()
-                .AlignMiddle();
-        }
-        private void ComposeFooter (IContainer container)
-        {
-            container.AlignCenter().Text(text =>
+            foreach (var header in headers)
             {
-                text.DefaultTextStyle(x => x.FontSize(16));
-                text.Span("Page Number ");
-                text.CurrentPageNumber();
-                text.Span(" of ").FontColor(Colors.Orange.Accent4).Underline();
-                text.TotalPages();
-            });
-        }
-        private Dictionary<string, List<string>> GetNonPrimitiveListPropertyNames (object obj)
-        {
-            var result = new Dictionary<string, List<string>>();
-
-            // Get all public properties of the object
-            var properties = obj.GetType().GetProperties();
-
-            foreach (var property in properties)
-            {
-                // Check if the property is a list (IEnumerable) but not a string
-                if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))
+                if (header.ChildHeaders != null && header.ChildHeaders.Any())
                 {
-                    // Get the value of the property (the list)
-                    var value = property.GetValue(obj);
-
-                    if (value is IEnumerable list)
-                    {
-                        // Get the type of elements in the list
-                        var elementType = property.PropertyType.GetGenericArguments().FirstOrDefault();
-
-                        if (elementType != null && !elementType.IsPrimitive && elementType != typeof(string))
-                        {
-                            // Create a list to store property names of the list items
-                            var propertyNames = new List<string>();
-
-                            // Get properties of the first item in the list (if there is any)
-                            var firstItem = list.Cast<object>().FirstOrDefault();
-                            if (firstItem != null)
-                            {
-                                var elementProperties = elementType.GetProperties();
-
-                                foreach (var prop in elementProperties)
-                                {
-                                    propertyNames.Add(prop.Name); // Add the property names
-                                }
-                            }
-
-                            // Add the list type and its properties to the result dictionary
-                            result.Add(property.Name, propertyNames);
-                        }
-                    }
+                    headersWithChildren.Add(header); // Add headers with child headers to the list
                 }
             }
 
-            return result;
+            return headersWithChildren; // Return the list of headers with child headers
         }
-        private string[] GetPropertyNamesArray (Dictionary<string, List<string>> dictionary)
-        {
-            // Create a list to store all property names
-            var allPropertyNames = new List<string>();
+    }
+    public static class TypographyStyle
+    {
 
-            // Loop through the dictionary to get only the values (list of strings)
-            foreach (var entry in dictionary)
-            {
-                // Add each property name in the list to the result
-                allPropertyNames.AddRange(entry.Value);
-            }
+        public static TextStyle Title => TextStyle
+            .Default
+            .FontFamily("Helvetica")
+            .FontColor(Colors.Blue.Medium)
+            .FontSize(20)
+            .Bold();
 
-            // Convert the list of property names to an array and return it
-            return allPropertyNames.ToArray();
-        }
+
+        public static TextStyle Headline => TextStyle
+            .Default
+            .FontFamily("Helvetica")
+            .FontColor(Colors.Blue.Medium)
+            .FontSize(14);
+
+
+        public static TextStyle Normal => TextStyle
+            .Default
+            .FontFamily("Helvetica")
+            .FontColor("#000000")
+            .FontSize(10)
+            .LineHeight(1.25f);
 
     }
 }
