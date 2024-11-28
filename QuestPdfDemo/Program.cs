@@ -25,7 +25,7 @@ var headers = new List<Header>
             new Header("MY Value", "القيمة", y => ((MyType)y).Value, type: HeaderType.Primitive)
         },
         type: HeaderType.ComplexType)
-};
+}; 
 
 var products = new List<Product>
 {
